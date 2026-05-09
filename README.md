@@ -56,26 +56,81 @@ along with this library; if not, see <https://www.gnu.org/licenses/>.
 
 ## Modifications relative to upstream Nuked-OPM
 
-The substantive behavioural fidelity work for the YM2164 lives outside
-this file in the XCent product itself (mostly as register pre/post-scaling
-tables in XCent's `RomTables.h` and `FirmwareLogic.cpp`). The chip-level
-divergences carried in this fork are deliberately small:
+Most of the YM2164 behavioural fidelity work for XCent lives **outside**
+this fork — in XCent's own register pre/post-scaling tables and firmware
+emulation layer. The chip-level divergences carried inside this fork are
+deliberately narrow.
 
-1. **Symbol renames** — `OPM_*` → `OPP_*`, `opm_t` → `opp_t`. This lets
-   OPP and the unmodified OPM coexist in the same translation unit (the
-   XCent test build links both for cross-validation; see XCent issue
-   tracker `CODE14`).
+**File sizes** (against upstream Nuked-OPM, master branch):
 
-2. **OPP-mode IC reset flag** — `opp_flags_ym2164` is used at chip reset
-   to select YM2164 behaviour where it differs from YM2151.
+| File   | Upstream lines | Fork lines | Δ  |
+|--------|---------------:|-----------:|---:|
+| `.c`   | 2,241          | 2,263      | +22 |
+| `.h`   | 289            | 304        | +15 |
 
-3. **OPP-only TL ramp / attack-tick mechanism** — present but currently
-   inactive (see comments around `kArRemap` in XCent's `RomTables.h`); the
-   AR remap is applied register-side rather than chip-internal because the
-   chip-side ramp introduced unwanted envelope ripple during testing.
+The +37-line difference is accounted for entirely by the additions listed
+below. (The remaining ~95% of the diff is mechanical symbol renaming.)
+
+### 1. Mechanical symbol rename (zero behaviour change)
+
+To allow the unmodified upstream OPM and this fork to be linked into the
+same translation unit (XCent's test build does this for cross-validation),
+all public identifiers were renamed:
+
+  - Header guard:  `_OPM_H_`     → `_OPP_H_`
+  - Type:          `opm_t`        → `opp_t`
+  - Functions:     `OPM_Reset`    → `OPP_Reset`,
+                   `OPM_Write`    → `OPP_Write`,
+                   `OPM_Clock`    → `OPP_Clock`,
+                   `OPM_Read`     → `OPP_Read`,
+                   `OPM_SetIC`    → `OPP_SetIC`,
+                   `OPM_ReadIRQ`  → `OPP_ReadIRQ`,
+                   `OPM_ReadCT1`  → `OPP_ReadCT1`,
+                   `OPM_ReadCT2`  → `OPP_ReadCT2`
+  - Enum:          `opm_flags_*`  → `opp_flags_*`  (values unchanged:
+                   `opp_flags_none = 0`, `opp_flags_ym2164 = 1`)
+  - Internal      `opm_*`        → `opp_*`        (struct field prefixes
+    naming:                                       and helper-function names)
+
+Every OPP-named field already present in upstream (e.g. `eg_tl_opp`,
+`opp_tl_cnt`, `opp_tl[32]`, `opp_flags_ym2164`) is **upstream Nuked-OPM
+behaviour** — Nuke.YKT models the YM2164 OPP variant natively. None of
+those fields are XCent additions.
+
+### 2. License-header amendment
+
+Source-file headers in `opp.c` and `opp.h` carry an additional copyright
+line acknowledging the Knives On Strings modifications, alongside the
+preserved Nuke.YKT original. The licence terms (LGPL-2.1-or-later) are
+unchanged.
+
+### 3. New mechanism: per-slot attack-rate skip (XCent issue DSP23)
+
+This is the only behavioural addition. It exists to allow XCent to hit
+attack times that fall between the granularity of the OPM AR table
+(specifically: hardware DX100 measurements at AR=18–30 produced
+~105–115 ms attacks, but the closest upstream-reachable AR=13 produces
+~95 ms; no upstream AR exists between 95 ms and 140 ms).
+
+**Mechanism**: per slot, optionally skip every Nth `eg_inc=1` tick while
+the envelope is in the attack state. `skip=N` makes the attack
+`(N+1)/N` times longer (e.g. `skip=10` → 1.10×). `skip=0` disables
+the mechanism (default).
+
+**Where it lives**:
+
+| What                                       | File   | Lines (approx) |
+|--------------------------------------------|--------|----------------|
+| `opp_atk_skip[32]`, `opp_atk_skip_cnt[32]` | `opp.h` | 226–232      |
+| `OPP_SetAttackSkip` declaration            | `opp.h` | 298          |
+| Attack-skip logic in EG inc handler        | `opp.c` | ~666–676     |
+| `OPP_SetAttackSkip` definition             | `opp.c` | 2257–2263    |
+
+That's the entire chip-internal divergence. ~10 lines of behavioural code
+plus a 7-line public API.
 
 If you are diffing against upstream Nuked-OPM and find a divergence that
-is not in this list, that is a documentation bug — please open an issue.
+is not on this list, that is a documentation bug — please open an issue.
 
 ## Tags and XCent release correspondence
 
