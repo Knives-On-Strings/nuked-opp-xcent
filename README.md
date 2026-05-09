@@ -7,7 +7,7 @@ LGPL-2.1 licence under which the binary distribution of **XCent** — a
 Yamaha DX100 emulation by Knives On Strings — links it.
 
 - **XCent product page:** https://knivesonstrings.com/xcent
-- **XCent on KVR:** [PLACEHOLDER: KVR profile URL — fill in before tagging the next release]
+- **XCent on KVR:** https://www.kvraudio.com/product/xcent-by-knives-on-strings
 - **Upstream Nuked-OPM:** https://github.com/nukeykt/Nuked-OPM
 
 If you are an XCent end user looking to exercise the LGPL §6 relink right —
