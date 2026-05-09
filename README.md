@@ -3,11 +3,20 @@
 A modified fork of [Nuked-OPM](https://github.com/nukeykt/Nuked-OPM) by
 Nuke.YKT, with Yamaha YM2164 (OPP) behavioural tweaks. This source is
 distributed publicly to satisfy the source-availability obligations of the
-LGPL-2.1 licence under which the binary distribution of XCent — a Yamaha
-DX100 emulation by Knives On Strings — links it.
+LGPL-2.1 licence under which the binary distribution of **XCent** — a
+Yamaha DX100 emulation by Knives On Strings — links it.
 
-If you are an XCent end user looking to relink the XCent product against a
-modified copy of this code, this repository is the source you need.
+- **XCent product page:** https://knivesonstrings.com/xcent
+- **XCent on KVR:** [PLACEHOLDER: KVR profile URL — fill in before tagging the next release]
+- **Upstream Nuked-OPM:** https://github.com/nukeykt/Nuked-OPM
+
+If you are an XCent end user looking to exercise the LGPL §6 relink right —
+that is, to substitute a modified copy of Nuked-OPP into the XCent product
+you have installed — see the **Relinking XCent against a modified
+Nuked-OPP** section below. (XCent v0.14.0 onward dynamically links this
+library, so relinking is just a matter of dropping in a replacement file;
+no rebuild of XCent itself is required.)
+
 If you are a developer interested in YM2164 emulation in general, the
 upstream Nuked-OPM repository is almost certainly what you want first;
 the divergences here are XCent-specific and may not be useful out of
@@ -152,11 +161,76 @@ corresponding source. Knives On Strings will honour such requests for at
 least three (3) years from the date of distribution of the corresponding
 release, in accordance with LGPL §6.
 
+## Relinking XCent against a modified Nuked-OPP
+
+XCent v0.14.0 onward dynamically links Nuked-OPP. This means you can
+substitute a modified version of the library without rebuilding XCent
+itself — exactly what LGPL §6 contemplates.
+
+### Steps
+
+1. Clone this repository at the tag matching the XCent version you have
+   installed (find the version in XCent's About modal):
+
+   ```bash
+   git clone https://github.com/Knives-On-Strings/nuked-opp-xcent
+   cd nuked-opp-xcent
+   git checkout v0.14.0-rc1   # replace with your XCent version
+   ```
+
+2. Make your modifications to `opp.c` and/or `opp.h`.
+
+3. Build a replacement shared library matching the XCent target platform's
+   ABI. Examples:
+
+   ```bash
+   # Windows (MSVC, x64)
+   cl /LD /Ox /std:c11 opp.c /Fe:NukedOPP.dll
+
+   # macOS (clang, universal)
+   clang -dynamiclib -O3 -arch x86_64 -arch arm64 \
+         -install_name @rpath/libNukedOPP.dylib \
+         opp.c -o libNukedOPP.dylib
+
+   # Linux (gcc, x64)
+   gcc -shared -O3 -fPIC -Wl,-soname,libNukedOPP.so \
+         opp.c -o libNukedOPP.so
+   ```
+
+   The XCent build uses C99 with `/Ox` (MSVC) or `-O3` (gcc/clang) and
+   relies on default symbol visibility; on MSVC, `WINDOWS_EXPORT_ALL_SYMBOLS`
+   is the equivalent. No special preprocessor flags are required.
+
+4. Replace the `NukedOPP.dll` / `libNukedOPP.dylib` / `libNukedOPP.so`
+   that XCent shipped with your modified copy. The library lives next
+   to the XCent plugin binary inside its bundle:
+
+   - **Windows VST3:** `XCent.vst3\Contents\x86_64-win\NukedOPP.dll`
+   - **Windows CLAP:** the directory containing `XCent.clap`
+   - **Windows Standalone:** the directory containing `XCent.exe`
+   - **macOS VST3 / AU / Standalone:** `XCent.vst3/Contents/MacOS/libNukedOPP.dylib` and analogous paths inside `XCent.component` / `XCent.app`
+   - **Linux:** the directory containing the `XCent.vst3` / `XCent.clap` / `XCent` binary
+
+5. Reload XCent in your DAW (or restart the standalone). The OS dynamic
+   loader will pick up your replacement copy automatically.
+
+### iOS / AUv3 limitation
+
+On iOS, the AUv3 build of XCent statically links Nuked-OPP. This is
+because Apple's platform restrictions prevent end users from relinking
+or re-signing app bundles outside the App Store toolchain — meaning the
+LGPL §6 relink right is not exercisable on iOS regardless of how
+Nuked-OPP is structured. End users on iOS who wish to exercise their
+relink right are encouraged to use XCent's desktop builds (Windows /
+macOS / Linux), where Nuked-OPP is dynamically linked as described
+above. Source for the iOS build's bundled Nuked-OPP remains available
+in this repository per LGPL §6 source-availability obligations.
+
 ## Building this code in isolation
 
-This repository ships only the chip emulator. It is not a standalone
-synthesiser or plugin. To use it, you would need to drive its register
-interface yourself:
+This repository ships only the chip emulator; it is not a standalone
+synthesiser or plugin. To use it independently of XCent, drive its
+register interface yourself:
 
 ```c
 #include "opp.h"
@@ -172,12 +246,8 @@ OPP_Clock(&chip, output, &sh1, &sh2, &so);
 ```
 
 The full register map and timing model are documented in upstream
-Nuked-OPM and in XCent's `Docs/specs/02-YM2164-FM-ENGINE.md` (not
-included in this repository). For a working integration example, see
-XCent's `src/fm_engine/NukedEngine.h`.
-
-There is no build system for this repository. Compile `opp.c` with any
-C99-compliant C compiler.
+Nuked-OPM. For a working integration example see XCent's
+`src/fm_engine/NukedEngine.h` (not included in this repository).
 
 ## Reporting issues
 
