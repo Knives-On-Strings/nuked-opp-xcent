@@ -26,6 +26,9 @@ context.
 
 - `opp.c` — main emulation source
 - `opp.h` — public API header
+- `CMakeLists.txt` — minimal build system that produces an
+  ABI-compatible shared library for desktop XCent (Windows /
+  macOS / Linux); see "Relinking XCent…" below
 - `LICENSE` — verbatim GNU Lesser General Public Licence, version 2.1
 
 ## Provenance
@@ -180,13 +183,28 @@ itself — exactly what LGPL §6 contemplates.
 
 2. Make your modifications to `opp.c` and/or `opp.h`.
 
-3. Build a replacement shared library matching the XCent target platform's
-   ABI. Examples:
+3. Build a replacement shared library using the bundled
+   `CMakeLists.txt`. This builds the same flags XCent uses internally
+   (`/Ox` on MSVC, `-O3` on gcc/clang, C99, position-independent code,
+   `WINDOWS_EXPORT_ALL_SYMBOLS` on Windows) so the result is
+   ABI-compatible with the shipped XCent binary:
 
    ```bash
-   # Windows (MSVC, x64)
-   cl /LD /Ox /std:c11 opp.c /Fe:NukedOPP.dll
+   cmake -B build -DCMAKE_BUILD_TYPE=Release
+   cmake --build build --config Release
+   ```
 
+   The output appears in `build/` (and on Windows, also in
+   `build/Release/`):
+
+   - **Windows:** `NukedOPP.dll`
+   - **macOS:** `libNukedOPP.dylib`
+   - **Linux:** `libNukedOPP.so`
+
+   If you would rather not use CMake, the equivalent direct commands
+   are:
+
+   ```bash
    # macOS (clang, universal)
    clang -dynamiclib -O3 -arch x86_64 -arch arm64 \
          -install_name @rpath/libNukedOPP.dylib \
@@ -197,9 +215,12 @@ itself — exactly what LGPL §6 contemplates.
          opp.c -o libNukedOPP.so
    ```
 
-   The XCent build uses C99 with `/Ox` (MSVC) or `-O3` (gcc/clang) and
-   relies on default symbol visibility; on MSVC, `WINDOWS_EXPORT_ALL_SYMBOLS`
-   is the equivalent. No special preprocessor flags are required.
+   On Windows, a single-command compile is awkward because
+   `opp.h` does not annotate its public functions with
+   `__declspec(dllexport)` — we deliberately keep `opp.h`
+   close to upstream Nuked-OPM. The bundled `CMakeLists.txt`
+   handles this via `WINDOWS_EXPORT_ALL_SYMBOLS`, which generates
+   the export `.def` file automatically. Use CMake on Windows.
 
 4. Replace the `NukedOPP.dll` / `libNukedOPP.dylib` / `libNukedOPP.so`
    that XCent shipped with your modified copy. The library lives next
